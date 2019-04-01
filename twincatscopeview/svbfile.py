@@ -163,9 +163,16 @@ class Channel:
             return np.array(self.Values)
         
         return np.interp(t, self.Time, self.Values)
+    
+    def toDataFrame(self):
+        import pandas as pd
+        df = pd.DataFrame()
+        df['Time'] = self.Time
+        df[self.Name] = self.Values
+        return  df.set_index('Time')
         
     def __repr__(self):
-        return '[%s]*%d @ %0.2f ms: %.25s' % (self.DataType, self.SamplesInFile, self.SampleTime*1000, self.Name)
+        return '[%s]*%d @ %0.2f ms: %s' % (self.DataType, self.SamplesInFile, self.SampleTime*1000, self.Name)
 
 
 class SVBFile(collections.abc.Mapping):
@@ -200,3 +207,21 @@ class SVBFile(collections.abc.Mapping):
     
     def __len__(self):
         return len(self._channels)
+    
+    def toDataFrame(self,keys=None,method='pad'):
+        '''Return a pandas dataframe containing data from channels with key in keys
+        df = svbFile.toDataFrame(keys=None,method='pad')
+        Backfills all missing data in lower frequency channels by pad method (details in pandas df.reindex)
+        '''
+        import pandas as pd
+        
+        if keys is None:
+            keys = [self[a].Name for a in self]
+        lens = [self[a].SamplesInFile for a in self]
+        maxkey = keys[lens.index(max(lens))]
+        keys.remove(maxkey)
+        
+        df = self[maxkey].toDataFrame()
+        for key in keys:
+            df = self[key].toDataFrame().reindex(df.index, method=method).join(df)
+        return df
